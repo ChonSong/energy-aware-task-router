@@ -1,0 +1,21 @@
+router:
+  default_region: "AU-NSW"
+  carbon_api_timeout: 10
+  fallback_behavior: "route_now"
+
+carbon_api:
+  api_key: null
+  base_url: "https://api.electricitymap.org/v3"
+  cache_ttl: 300
+
+audit:
+  format: "json"
+  level: "info"
+  file: "logs/routing_audit.jsonl"
+
+tasks:
+  default_max_deferral: "PT24H"
+  eligible_types:
+    - "batch_compute"
+    - "model_training"
+    - "report_generation"
