@@ -2,7 +2,7 @@
   "project": "energy-aware-task-router",
   "repo": "/home/sc/repos/energy-aware-task-router",
   "phase": 4,
-  "phase_name": "Production Hardening — Phase 4a done",
+  "phase_name": "Production Hardening — Phase 4b done",
   "completed": [
     "Phase 1: Project foundation (.gitignore, Docker, docker-compose, Makefile, package structure, tests scaffold)",
     "Phase 2: Real carbon API (electricitymap.org with cache+fallback), Redis queue, SQLite audit, CLI tool, CI workflow",
@@ -11,11 +11,12 @@
     "Fixed test infrastructure: pytest-asyncio version constraint, API test fixture, carbon API mock pattern",
     "Phase 3b: Enhanced healthcheck endpoint (version, uptime, component checks) + Cloudflare tunnel config",
     "Phase 3c: Prometheus /metrics endpoint + HTML monitoring dashboard",
-    "Phase 4a: In-memory rate limiting middleware with zero external deps (sliding window, burst control, X-RateLimit headers, 429 on exceed)"
+    "Phase 4a: In-memory rate limiting middleware with zero external deps (sliding window, burst control, X-RateLimit headers, 429 on exceed)",
+    "Phase 4b: API key authentication middleware (APIKeyAuth class, X-API-Key header, config/env-var keys, permissive dev mode, 8 new tests)"
   ],
-  "current": "Phase 4a: rate limiting done",
-  "next": "Phase 4b: API key authentication middleware",
-  "health": "32_pass_0_error_0_fail",
-  "last_sha": "726346c",
+  "current": "Phase 4b: API key auth done",
+  "next": "Phase 4c: Structured logging with structlog (or Phase 5: Kubernetes readiness probes)",
+  "health": "40_pass_0_error_0_fail",
+  "last_sha": "6fe34b5",
   "blocker": null
 }
