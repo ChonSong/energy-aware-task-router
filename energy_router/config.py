@@ -39,6 +39,10 @@ class RouterConfig:
     # API key authentication
     api_keys: list[str] = field(default_factory=list)
 
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "json"
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
@@ -51,6 +55,7 @@ class RouterConfig:
         audit = data.get("audit", {})
         tasks = data.get("tasks", {})
         auth = data.get("auth", {})
+        logging_cfg = data.get("logging", {})
 
         if "default_region" in router:
             cfg.default_region = router["default_region"]
@@ -84,6 +89,11 @@ class RouterConfig:
         if "api_keys" in auth:
             cfg.api_keys = auth["api_keys"]
 
+        if "level" in logging_cfg:
+            cfg.log_level = logging_cfg["level"]
+        if "format" in logging_cfg:
+            cfg.log_format = logging_cfg["format"]
+
         return cfg
 
 
@@ -115,5 +125,10 @@ def load_config(path: str | Path | None = None) -> RouterConfig:
         cfg.default_region = region
     if env_keys := os.environ.get("ROUTER_API_KEYS"):
         cfg.api_keys = [k.strip() for k in env_keys.replace(",", " ").split() if k.strip()]
+
+    if log_level := os.environ.get("LOG_LEVEL"):
+        cfg.log_level = log_level.upper()
+    if log_format := os.environ.get("LOG_FORMAT"):
+        cfg.log_format = log_format.lower()
 
     return cfg

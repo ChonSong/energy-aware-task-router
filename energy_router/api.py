@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+import structlog
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
@@ -16,6 +18,7 @@ from energy_router import __version__
 from energy_router.auth import AUTH_EXEMPT_PATHS, APIKeyAuth
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
+from energy_router.logging_config import configure_logging
 from energy_router.monitoring import collect_metrics_text, dashboard_html, record_metric
 from energy_router.ratelimit import (
     RateLimiter,
@@ -29,6 +32,7 @@ _router: TaskRouter | None = None
 _startup_time: float | None = None
 _rate_limiter: RateLimiter | None = None
 _auth: APIKeyAuth | None = None
+_logger = structlog.get_logger()
 
 
 class TaskSubmitRequest(BaseModel):
@@ -49,6 +53,11 @@ class TaskSubmitResponse(BaseModel):
 async def startup():
     global _router, _startup_time, _rate_limiter, _auth
     cfg = load_config("config.yaml")
+
+    # Configure structured logging early
+    configure_logging(level=cfg.log_level, log_format=cfg.log_format)
+    _logger.info("app.startup", log_level=cfg.log_level, log_format=cfg.log_format)
+
     client = CarbonApiClient(
         api_key=cfg.carbon_api_key,
         base_url=cfg.carbon_api_base_url,
@@ -86,6 +95,28 @@ async def auth_middleware(request: Request, call_next: Any):
         )
 
     return await call_next(request)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next: Any):
+    """Log every request and its response status."""
+    start = time.monotonic()
+    method = request.method
+    path = request.url.path
+    client_ip = request.client.host if request.client else "unknown"
+
+    response = await call_next(request)
+
+    elapsed = time.monotonic() - start
+    _logger.info(
+        "http.request",
+        method=method,
+        path=path,
+        status=response.status_code,
+        duration_ms=round(elapsed * 1000, 1),
+        client_ip=client_ip,
+    )
+    return response
 
 
 @app.middleware("http")
