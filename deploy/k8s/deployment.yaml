@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: energy-router
+  labels:
+    app: energy-router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: energy-router
+  template:
+    metadata:
+      labels:
+        app: energy-router
+    spec:
+      containers:
+        - name: api
+          image: energy-aware-task-router:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8009
+              name: http
+          env:
+            - name: CARBON_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: energy-router-secrets
+                  key: carbon-api-key
+                  optional: true
+            - name: ROUTER_DEFAULT_REGION
+              value: "AU-NSW"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: LOG_FORMAT
+              value: "json"
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

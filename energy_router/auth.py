@@ -15,7 +15,7 @@ import structlog
 logger = structlog.get_logger()
 
 AUTH_HEADER = "X-API-Key"
-AUTH_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard"}
+AUTH_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard", "/livez", "/readyz"}
 
 
 class APIKeyAuth:

@@ -119,7 +119,7 @@ async def shutdown():
 # Middleware
 # ---------------------------------------------------------------------------
 
-RATE_LIMIT_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard"}
+RATE_LIMIT_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard", "/livez", "/readyz"}
 
 
 @app.middleware("http")
@@ -222,6 +222,35 @@ async def submit_task(req: TaskSubmitRequest):
     )
     decision = await _router.route(task)
     return TaskSubmitResponse(task_id=task.id, name=task.name, status=decision.decision)
+
+
+@app.get("/livez")
+async def livez():
+    """Kubernetes liveness probe.
+
+    Returns 200 with ``{"status": "alive"}`` if the process is running
+    and the ASGI loop is responsive.  No dependency checks — a dead
+    process won't reach this handler, so a 200 response is sufficient
+    proof of life.
+    """
+    return {"status": "alive"}
+
+
+@app.get("/readyz")
+async def readyz():
+    """Kubernetes readiness probe.
+
+    Returns 200 if the router is initialised and the app is ready to
+    serve traffic.  Returns 503 if the router has not yet been
+    initialised (or has been cleared during a graceful shutdown).
+    """
+    global _router
+    if _router is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "detail": "router not initialised"},
+        )
+    return {"status": "ready"}
 
 
 @app.get("/metrics")

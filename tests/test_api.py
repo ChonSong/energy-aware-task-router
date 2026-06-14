@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from energy_router.api import app, _startup_time, _router, _rate_limiter
+from energy_router.auth import APIKeyAuth
 from energy_router.carbon import CarbonApiClient
 from energy_router.config import load_config
 from energy_router.router import TaskRouter
@@ -135,6 +136,88 @@ async def test_submit_when_router_not_initialized(client):
     
     assert resp.status_code == 503
     assert "Router not initialized" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# K8s probe endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_livez_returns_alive(client):
+    """Liveness probe should always return 200."""
+    resp = await client.get("/livez")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "alive"
+
+
+@pytest.mark.asyncio
+async def test_readyz_ready_when_router_initialised(client):
+    """Readiness probe should return 200 when router is set."""
+    resp = await client.get("/readyz")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_readyz_not_ready_when_router_missing(client):
+    """Readiness probe should return 503 when router is None."""
+    import energy_router.api as api_mod
+
+    saved = api_mod._router
+    api_mod._router = None
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/readyz")
+
+    api_mod._router = saved
+
+    assert resp.status_code == 503
+    data = resp.json()
+    assert data["status"] == "not_ready"
+
+
+@pytest.mark.asyncio
+async def test_livez_is_rate_limit_exempt(client):
+    """Liveness probe should not be rate limited."""
+    import energy_router.api as api_mod
+    api_mod._rate_limiter = RateLimiter(max_requests=0, window_seconds=60)
+
+    resp = await client.get("/livez")
+    assert resp.status_code == 200  # exempt despite zero capacity
+
+
+@pytest.mark.asyncio
+async def test_readyz_is_rate_limit_exempt(client):
+    """Readiness probe should not be rate limited."""
+    import energy_router.api as api_mod
+    api_mod._rate_limiter = RateLimiter(max_requests=0, window_seconds=60)
+
+    resp = await client.get("/readyz")
+    assert resp.status_code == 200  # exempt despite zero capacity
+
+
+@pytest.mark.asyncio
+async def test_livez_is_auth_exempt(client):
+    """Liveness probe should not require authentication."""
+    import energy_router.api as api_mod
+    api_mod._auth = APIKeyAuth(["test-key"])
+
+    resp = await client.get("/livez")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_readyz_is_auth_exempt(client):
+    """Readiness probe should not require authentication."""
+    import energy_router.api as api_mod
+    api_mod._auth = APIKeyAuth(["test-key"])
+
+    resp = await client.get("/readyz")
+    assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------
