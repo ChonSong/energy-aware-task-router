@@ -1,7 +1,8 @@
-"""FastAPI server for energy-aware task router."""
+"""FastAPI application for the energy-aware task router."""
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
 from typing import Any
@@ -9,8 +10,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from router import Task, TaskRouter, CarbonApiClient, GridCarbonLevel
-
+from energy_router.carbon import CarbonApiClient, GridCarbonLevel
+from energy_router.config import load_config
+from energy_router.router import Task, TaskRouter
 
 app = FastAPI(title="Energy-Aware Task Router")
 _router: TaskRouter | None = None
@@ -33,8 +35,14 @@ class TaskSubmitResponse(BaseModel):
 @app.on_event("startup")
 async def startup():
     global _router
-    import os
-    _router = TaskRouter(CarbonApiClient(api_key=os.getenv("CARBON_API_KEY")))
+    cfg = load_config("config.yaml")
+    client = CarbonApiClient(
+        api_key=cfg.carbon_api_key,
+        base_url=cfg.carbon_api_base_url,
+        timeout=cfg.carbon_api_timeout,
+        cache_ttl=cfg.carbon_cache_ttl,
+    )
+    _router = TaskRouter(carbon_client=client, default_region=cfg.default_region)
 
 
 @app.post("/tasks", response_model=TaskSubmitResponse)

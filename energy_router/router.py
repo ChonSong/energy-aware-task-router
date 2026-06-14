@@ -2,35 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 import structlog
 
+from energy_router.carbon import CarbonApiClient, GridCarbonLevel, GridConditions
+
 logger = structlog.get_logger()
-
-
-class GridCarbonLevel(Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    UNKNOWN = "unknown"
-
-
-@dataclass
-class GridConditions:
-    timestamp: datetime.datetime
-    carbon_intensity_gco2kwh: float | None
-    level: GridCarbonLevel
-    region: str
-    source: str | None = None
-
-    def __post_init__(self):
-        if self.carbon_intensity_gco2kwh is None:
-            self.level = GridCarbonLevel.UNKNOWN
 
 
 @dataclass
@@ -60,32 +40,13 @@ class RoutingDecision:
     timestamp: datetime.datetime = field(default_factory=datetime.datetime.utcnow)
 
 
-class CarbonApiClient:
-    """Fetches real-time carbon intensity. Stub — replace with real API when key is set."""
-
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key
-
-    async def fetch_carbon_intensity(self, region: str = "AU-NSW") -> GridConditions:
-        now = datetime.datetime.utcnow()
-        if self.api_key:
-            pass  # TODO: implement electricitymap.org API call
-        level = GridCarbonLevel.LOW if now.hour % 3 == 0 else GridCarbonLevel.MEDIUM
-        return GridConditions(
-            timestamp=now,
-            carbon_intensity_gco2kwh=250.0,
-            level=level,
-            region=region,
-            source="simulation",
-        )
-
-
 class TaskRouter:
-    def __init__(self, carbon_client: CarbonApiClient):
+    def __init__(self, carbon_client: CarbonApiClient, default_region: str = "AU-NSW"):
         self.carbon = carbon_client
+        self.default_region = default_region
 
     async def route(self, task: Task) -> RoutingDecision:
-        conditions = await self.carbon.fetch_carbon_intensity()
+        conditions = await self.carbon.fetch_carbon_intensity(region=self.default_region)
         target_level = task.defer_until or GridCarbonLevel.LOW
 
         if not task.can_defer:

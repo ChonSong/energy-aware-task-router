@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    container_name: energy-router
+    ports:
+      - "8009:8009"
+    environment:
+      - CARBON_API_KEY=${CARBON_API_KEY:-}
+      - ROUTER_DEFAULT_REGION=${ROUTER_DEFAULT_REGION:-AU-NSW}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./routing_audit.db:/app/routing_audit.db
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    container_name: energy-router-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
