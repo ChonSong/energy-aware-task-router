@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 import structlog
 
@@ -43,12 +44,32 @@ class CarbonApiClient:
         base_url: str = "https://api.electricitymap.org/v3",
         timeout: int = 10,
         cache_ttl: int = 300,
+        http_client: Any | None = None,
     ):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.cache_ttl = cache_ttl
         self._cache: dict[str, tuple[datetime.datetime, GridConditions]] = {}
+        # Shared HTTPX client — set externally for lifecycle management.
+        # When None, a temporary client is created per-request (legacy behaviour).
+        self._http_client = http_client
+
+    # -- lifecycle -----------------------------------------------------------
+
+    async def close(self) -> None:
+        """Close the shared HTTP client if one was provided (no-op otherwise).
+
+        This is called automatically by the lifecycle manager when the
+        server shuts down.
+        """
+        if self._http_client is not None:
+            try:
+                await self._http_client.aclose()
+            except Exception:
+                pass
+
+    # -- public API ----------------------------------------------------------
 
     async def fetch_carbon_intensity(self, region: str = "AU-NSW") -> GridConditions:
         """Fetch current carbon intensity for the given region.
@@ -84,10 +105,15 @@ class CarbonApiClient:
             params = {"zone": region}
             headers = {"auth-token": self.api_key}
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(url, params=params, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            if self._http_client is not None:
+                # Use the shared client (managed by LifecycleManager)
+                resp = await self._http_client.get(url, params=params, headers=headers)
+            else:
+                # Legacy: create a temporary client per request
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    resp = await client.get(url, params=params, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
 
             intensity = data.get("carbonIntensity")
             if intensity is not None:

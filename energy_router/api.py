@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+import httpx
 import structlog
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,6 +19,7 @@ from energy_router import __version__
 from energy_router.auth import AUTH_EXEMPT_PATHS, APIKeyAuth
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
+from energy_router.lifecycle import LifecycleManager
 from energy_router.logging_config import configure_logging
 from energy_router.monitoring import collect_metrics_text, dashboard_html, record_metric
 from energy_router.ratelimit import (
@@ -32,6 +34,7 @@ _router: TaskRouter | None = None
 _startup_time: float | None = None
 _rate_limiter: RateLimiter | None = None
 _auth: APIKeyAuth | None = None
+_lifecycle: LifecycleManager | None = None
 _logger = structlog.get_logger()
 
 
@@ -49,26 +52,72 @@ class TaskSubmitResponse(BaseModel):
     status: str
 
 
+# ---------------------------------------------------------------------------
+# Lifespan (startup / shutdown)
+# ---------------------------------------------------------------------------
+# Using on_event for backward compatibility — if the FastAPI version used
+# supports lifespan context managers these will be migrated when Python 3.12
+# is the minimum target.
+
+
 @app.on_event("startup")
 async def startup():
-    global _router, _startup_time, _rate_limiter, _auth
+    """Initialise all shared resources on application start.
+
+    - Load configuration
+    - Configure structured logging
+    - Create shared HTTPX client (managed by LifecycleManager)
+    - Create Carbon API client, task router, rate limiter, and auth
+    """
+    global _router, _startup_time, _rate_limiter, _auth, _lifecycle
+
     cfg = load_config("config.yaml")
 
     # Configure structured logging early
     configure_logging(level=cfg.log_level, log_format=cfg.log_format)
     _logger.info("app.startup", log_level=cfg.log_level, log_format=cfg.log_format)
 
-    client = CarbonApiClient(
+    # Shared HTTPX client (long-lived, closed on shutdown)
+    http_client = httpx.AsyncClient(timeout=cfg.carbon_api_timeout)
+
+    _lifecycle = LifecycleManager()
+    _lifecycle.set_http_client(http_client)
+
+    if cfg.redis_url:
+        _lifecycle.set_redis_url(cfg.redis_url)
+
+    carbon_client = CarbonApiClient(
         api_key=cfg.carbon_api_key,
         base_url=cfg.carbon_api_base_url,
         timeout=cfg.carbon_api_timeout,
         cache_ttl=cfg.carbon_cache_ttl,
+        http_client=http_client,
     )
-    _router = TaskRouter(carbon_client=client, default_region=cfg.default_region)
+    _router = TaskRouter(carbon_client=carbon_client, default_region=cfg.default_region)
     _startup_time = time.time()
     _rate_limiter = RateLimiter()
     _auth = APIKeyAuth.from_config(config_keys=cfg.api_keys)
 
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Gracefully release all shared resources on application stop.
+
+    Order:
+        1. Notify that shutdown is beginning
+        2. Close the HTTP client (drains in-flight Carbon API requests)
+        3. Close the Redis connection (if reachable)
+    """
+    global _lifecycle
+
+    _logger.info("app.shutdown")
+    if _lifecycle is not None:
+        await _lifecycle.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
 
 RATE_LIMIT_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard"}
 
@@ -146,6 +195,11 @@ async def rate_limit_middleware(request: Request, call_next: Any):
     response.headers["X-RateLimit-Limit"] = str(limiter.max_requests)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     return response
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 
 @app.post("/tasks", response_model=TaskSubmitResponse)

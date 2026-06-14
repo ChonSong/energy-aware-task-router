@@ -7,6 +7,7 @@ from energy_router.router import TaskRouter, RoutingDecision
 from energy_router.carbon import CarbonApiClient, GridConditions, GridCarbonLevel
 from energy_router.api import app
 from energy_router.ratelimit import RateLimiter
+from energy_router.lifecycle import LifecycleManager
 
 __all__ = [
     "load_config",
@@ -18,4 +19,5 @@ __all__ = [
     "GridCarbonLevel",
     "app",
     "RateLimiter",
+    "LifecycleManager",
 ]

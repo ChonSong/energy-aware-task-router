@@ -89,10 +89,27 @@ def health():
 
 
 @cli.command()
-def serve():
-    """Start the FastAPI server."""
+def serve(
+    host: str = "0.0.0.0",
+    port: int = 8009,
+    log_level: str = "info",
+    timeout_graceful_shutdown: int = 10,
+):
+    """Start the FastAPI server with graceful shutdown support.
+
+    Use ``--timeout-graceful-shutdown`` to control how many seconds
+    uvicorn waits for in-flight requests to finish before forcing a
+    stop.
+    """
     import uvicorn
-    uvicorn.run(fastapi_app, host="0.0.0.0", port=8009)
+
+    uvicorn.run(
+        fastapi_app,
+        host=host,
+        port=port,
+        log_level=log_level,
+        timeout_graceful_shutdown=timeout_graceful_shutdown,
+    )
 
 
 if __name__ == "__main__":
