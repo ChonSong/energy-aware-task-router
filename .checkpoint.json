@@ -2,17 +2,19 @@
   "project": "energy-aware-task-router",
   "repo": "/home/sc/repos/energy-aware-task-router",
   "phase": 3,
-  "phase_name": "Deployment Infrastructure",
+  "phase_name": "Deployment Infrastructure \u2014 Phase 3c done",
   "completed": [
     "Phase 1: Project foundation (.gitignore, Docker, docker-compose, Makefile, package structure, tests scaffold)",
     "Phase 2: Real carbon API (electricitymap.org with cache+fallback), Redis queue, SQLite audit, CLI tool, CI workflow",
     "All pushed to GitHub",
     "Phase 3a: Systemd service file + install script + Makefile deploy targets",
-    "Fixed test infrastructure: pytest-asyncio version constraint, API test fixture, carbon API mock pattern"
+    "Fixed test infrastructure: pytest-asyncio version constraint, API test fixture, carbon API mock pattern",
+    "Phase 3b: Enhanced healthcheck endpoint (version, uptime, component checks) + Cloudflare tunnel config",
+    "Phase 3c: Prometheus /metrics endpoint + HTML monitoring dashboard"
   ],
-  "current": null,
-  "next": "Phase 3b: Cloudflare tunnel config or monitoring/healthcheck endpoint",
-  "health": "15_pass_0_error_0_fail",
-  "last_sha": "7fa6c1a",
+  "current": "Phase 3c done",
+  "next": "Phase 4: Production hardening (rate limiting, auth, graceful shutdown)",
+  "health": "17_pass_0_error_0_fail",
+  "last_sha": "a07b718",
   "blocker": null
 }
