@@ -43,3 +43,6 @@ coverage/
 htmlcov/
 .coverage
 *.coverage
+
+# Cloudflare tunnel config (intentionally tracked)
+!deploy/cloudflared/config.yaml

@@ -1,0 +1,24 @@
+# Cloudflare Tunnel configuration for energy-aware-task-router
+#
+# Prerequisites:
+#   1. Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+#   2. Authenticate: cloudflared tunnel login
+#   3. Create tunnel: cloudflared tunnel create energy-router
+#   4. Update the tunnel UUID below and in the credentials-file path
+#
+# Usage:
+#   cloudflared tunnel --config deploy/cloudflared/config.yaml run
+#   # Or as a systemd service: cloudflared service install
+
+tunnel: energy-router
+credentials-file: /home/sc/.cloudflared/energy-router.json
+
+ingress:
+  # Route API traffic to the FastAPI service
+  - hostname: api.energy-router.example.com
+    service: http://localhost:8009
+  # Healthcheck endpoint for monitoring
+  - hostname: health.energy-router.example.com
+    service: http://localhost:8009/health
+  # Catch-all: reject all other traffic
+  - service: http_status:404

@@ -1,4 +1,4 @@
-.PHONY: dev test build deploy clean
+.PHONY: dev test build deploy clean lint format
 
 dev:
 	uvicorn energy_router.api:app --host 0.0.0.0 --port 8009 --reload
@@ -37,7 +37,11 @@ deploy-systemd:
 	@echo "==> Service status:"
 	sudo systemctl status energy-router --no-pager
 
+deploy-tunnel:
+	@echo "==> Running Cloudflare Tunnel..."
+	cloudflared tunnel --config deploy/cloudflared/config.yaml run
+
 deploy-all: deploy
 	$(MAKE) deploy-systemd
 
-.PHONY: dev test test-coverage build deploy clean lint format deploy-systemd deploy-all
+.PHONY: deploy-systemd deploy-tunnel

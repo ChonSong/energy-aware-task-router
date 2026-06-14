@@ -1,5 +1,7 @@
 """Energy-Aware Task Router — route compute to low-carbon grid windows."""
 
+__version__ = "0.1.0"
+
 from energy_router.config import load_config, RouterConfig
 from energy_router.router import TaskRouter, RoutingDecision
 from energy_router.carbon import CarbonApiClient, GridConditions, GridCarbonLevel
