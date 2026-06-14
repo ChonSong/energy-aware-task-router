@@ -19,3 +19,7 @@ tasks:
     - "batch_compute"
     - "model_training"
     - "report_generation"
+
+auth:
+  api_keys: []
+  # Example: api_keys: ["sk-***"]

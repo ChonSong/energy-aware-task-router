@@ -13,10 +13,11 @@ from energy_router.ratelimit import RateLimiter
 
 
 @pytest.fixture(autouse=True)
-def reset_api_rate_limiter():
-    """Reset the per-app rate limiter before each test."""
+def reset_state():
+    """Reset the per-app rate limiter and auth before each test."""
     import energy_router.api as api_mod
     api_mod._rate_limiter = RateLimiter(max_requests=1000, window_seconds=60, burst_max=100)
+    api_mod._auth = None
     yield
 
 
@@ -28,6 +29,7 @@ async def client():
     carbon_client = CarbonApiClient(api_key=cfg.carbon_api_key)
     api_mod._router = TaskRouter(carbon_client=carbon_client, default_region=cfg.default_region)
     api_mod._startup_time = 1000.0  # fixed fake startup time
+    api_mod._auth = None  # permissive mode (no keys configured)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

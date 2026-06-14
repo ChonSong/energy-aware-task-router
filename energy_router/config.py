@@ -36,6 +36,9 @@ class RouterConfig:
         default_factory=lambda: ["batch_compute", "model_training", "report_generation"]
     )
 
+    # API key authentication
+    api_keys: list[str] = field(default_factory=list)
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
@@ -47,6 +50,7 @@ class RouterConfig:
         carbon = data.get("carbon_api", {})
         audit = data.get("audit", {})
         tasks = data.get("tasks", {})
+        auth = data.get("auth", {})
 
         if "default_region" in router:
             cfg.default_region = router["default_region"]
@@ -77,6 +81,9 @@ class RouterConfig:
         if "eligible_types" in tasks:
             cfg.eligible_types = tasks["eligible_types"]
 
+        if "api_keys" in auth:
+            cfg.api_keys = auth["api_keys"]
+
         return cfg
 
 
@@ -86,6 +93,7 @@ def load_config(path: str | Path | None = None) -> RouterConfig:
     Env vars:
         CARBON_API_KEY        overrides carbon_api.api_key
         ROUTER_DEFAULT_REGION overrides router.default_region
+        ROUTER_API_KEYS       overrides auth.api_keys (comma-separated)
     """
     import os
 
@@ -105,5 +113,7 @@ def load_config(path: str | Path | None = None) -> RouterConfig:
         cfg.carbon_api_key = api_key
     if region := os.environ.get("ROUTER_DEFAULT_REGION"):
         cfg.default_region = region
+    if env_keys := os.environ.get("ROUTER_API_KEYS"):
+        cfg.api_keys = [k.strip() for k in env_keys.replace(",", " ").split() if k.strip()]
 
     return cfg

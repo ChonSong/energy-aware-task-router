@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from energy_router import __version__
+from energy_router.auth import AUTH_EXEMPT_PATHS, APIKeyAuth
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
 from energy_router.monitoring import collect_metrics_text, dashboard_html, record_metric
@@ -27,6 +28,7 @@ app = FastAPI(title="Energy-Aware Task Router")
 _router: TaskRouter | None = None
 _startup_time: float | None = None
 _rate_limiter: RateLimiter | None = None
+_auth: APIKeyAuth | None = None
 
 
 class TaskSubmitRequest(BaseModel):
@@ -45,7 +47,7 @@ class TaskSubmitResponse(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    global _router, _startup_time, _rate_limiter
+    global _router, _startup_time, _rate_limiter, _auth
     cfg = load_config("config.yaml")
     client = CarbonApiClient(
         api_key=cfg.carbon_api_key,
@@ -56,9 +58,34 @@ async def startup():
     _router = TaskRouter(carbon_client=client, default_region=cfg.default_region)
     _startup_time = time.time()
     _rate_limiter = RateLimiter()
+    _auth = APIKeyAuth.from_config(config_keys=cfg.api_keys)
 
 
 RATE_LIMIT_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard"}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next: Any):
+    """API key authentication middleware.
+
+    Checks ``X-API-Key`` header against configured keys.
+    Exempts the same monitoring paths as rate limiting.
+    When no keys are configured (development mode) all requests pass.
+    """
+    if request.url.path in AUTH_EXEMPT_PATHS:
+        return await call_next(request)
+
+    authenticator = _auth or APIKeyAuth()
+    api_key: str | None = request.headers.get("X-API-Key")
+
+    if not authenticator.authenticate(api_key):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized. Provide a valid API key via the X-API-Key header."},
+            headers={"WWW-Authenticate": "APIKey"},
+        )
+
+    return await call_next(request)
 
 
 @app.middleware("http")
