@@ -2,7 +2,7 @@
   "project": "energy-aware-task-router",
   "repo": "/home/sc/repos/energy-aware-task-router",
   "phase": 4,
-  "phase_name": "Production Hardening — Phase 4b done",
+  "phase_name": "Production Hardening — Phase 4d done",
   "completed": [
     "Phase 1: Project foundation (.gitignore, Docker, docker-compose, Makefile, package structure, tests scaffold)",
     "Phase 2: Real carbon API (electricitymap.org with cache+fallback), Redis queue, SQLite audit, CLI tool, CI workflow",
@@ -12,11 +12,13 @@
     "Phase 3b: Enhanced healthcheck endpoint (version, uptime, component checks) + Cloudflare tunnel config",
     "Phase 3c: Prometheus /metrics endpoint + HTML monitoring dashboard",
     "Phase 4a: In-memory rate limiting middleware with zero external deps (sliding window, burst control, X-RateLimit headers, 429 on exceed)",
-    "Phase 4b: API key authentication middleware (APIKeyAuth class, X-API-Key header, config/env-var keys, permissive dev mode, 8 new tests)"
+    "Phase 4b: API key authentication middleware (APIKeyAuth class, X-API-Key header, config/env-var keys, permissive dev mode, 8 new tests)",
+    "Phase 4c: Structured logging with structlog — centralized logging_config.py, request/response logging middleware, JSON/dev output, LOG_LEVEL/LOG_FORMAT env var overrides, 4 new tests",
+    "Phase 4d: Graceful shutdown / lifecycle hooks — LifecycleManager class, shared HTTPX client lifecycle, FastAPI shutdown event handler, Redis connection cleanup, CLI serve with timeout_graceful_shutdown, 9 new tests"
   ],
-  "current": "Phase 4b: API key auth done",
-  "next": "Phase 4c: Structured logging with structlog (or Phase 5: Kubernetes readiness probes)",
-  "health": "40_pass_0_error_0_fail",
-  "last_sha": "3b9ae81",
+  "current": "Phase 4d: Graceful shutdown / lifecycle hooks done",
+  "next": "Phase 5: Kubernetes readiness probes (or Phase 6: OpenAPI schema hardening)",
+  "health": "54_pass_0_error_0_fail",
+  "last_sha": "b0342be",
   "blocker": null
 }
