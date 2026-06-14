@@ -5,10 +5,19 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-from energy_router.api import app, _startup_time, _router
+from energy_router.api import app, _startup_time, _router, _rate_limiter
 from energy_router.carbon import CarbonApiClient
 from energy_router.config import load_config
 from energy_router.router import TaskRouter
+from energy_router.ratelimit import RateLimiter
+
+
+@pytest.fixture(autouse=True)
+def reset_api_rate_limiter():
+    """Reset the per-app rate limiter before each test."""
+    import energy_router.api as api_mod
+    api_mod._rate_limiter = RateLimiter(max_requests=1000, window_seconds=60, burst_max=100)
+    yield
 
 
 @pytest.fixture
@@ -124,3 +133,50 @@ async def test_submit_when_router_not_initialized(client):
     
     assert resp.status_code == 503
     assert "Router not initialized" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_headers_on_success(client):
+    """Successful requests should include rate-limit headers."""
+    resp = await client.post("/tasks", json={"name": "test"})
+    assert resp.status_code == 200
+    assert "X-RateLimit-Limit" in resp.headers
+    assert "X-RateLimit-Remaining" in resp.headers
+    assert resp.headers["X-RateLimit-Remaining"].isdigit()
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_exempts_monitoring_endpoints(client):
+    """Health, metrics, and dashboard should not be rate limited."""
+    import energy_router.api as api_mod
+    api_mod._rate_limiter = RateLimiter(max_requests=1, window_seconds=60)
+
+    resp = await client.get("/health")
+    assert resp.status_code == 200  # first request
+
+    resp = await client.get("/health")
+    assert resp.status_code == 200  # second request still works (exempt)
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_blocks_over_limit(client):
+    """Client exceeding the rate limit should receive 429."""
+    import energy_router.api as api_mod
+    api_mod._rate_limiter = RateLimiter(max_requests=2, window_seconds=60)
+
+    resp1 = await client.post("/tasks", json={"name": "t1"})
+    assert resp1.status_code == 200
+
+    resp2 = await client.post("/tasks", json={"name": "t2"})
+    assert resp2.status_code == 200
+
+    resp3 = await client.post("/tasks", json={"name": "t3"})
+    assert resp3.status_code == 429
+    data = resp3.json()
+    assert "rate limit" in data["detail"].lower()
+    assert "retry_after_seconds" in data

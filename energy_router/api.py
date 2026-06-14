@@ -8,19 +8,25 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from energy_router import __version__
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
 from energy_router.monitoring import collect_metrics_text, dashboard_html, record_metric
+from energy_router.ratelimit import (
+    RateLimiter,
+    extract_client_key,
+    get_default_limiter,
+)
 from energy_router.router import Task, TaskRouter
 
 app = FastAPI(title="Energy-Aware Task Router")
 _router: TaskRouter | None = None
 _startup_time: float | None = None
+_rate_limiter: RateLimiter | None = None
 
 
 class TaskSubmitRequest(BaseModel):
@@ -39,7 +45,7 @@ class TaskSubmitResponse(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    global _router, _startup_time
+    global _router, _startup_time, _rate_limiter
     cfg = load_config("config.yaml")
     client = CarbonApiClient(
         api_key=cfg.carbon_api_key,
@@ -49,6 +55,39 @@ async def startup():
     )
     _router = TaskRouter(carbon_client=client, default_region=cfg.default_region)
     _startup_time = time.time()
+    _rate_limiter = RateLimiter()
+
+
+RATE_LIMIT_EXEMPT_PATHS = {"/health", "/metrics", "/dashboard"}
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next: Any):
+    if request.url.path in RATE_LIMIT_EXEMPT_PATHS:
+        return await call_next(request)
+
+    limiter = _rate_limiter or get_default_limiter()
+    client_key = extract_client_key(request)
+
+    if not limiter.check(client_key):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Rate limit exceeded. Try again later.",
+                "retry_after_seconds": int(limiter.window_seconds),
+            },
+            headers={
+                "X-RateLimit-Limit": str(limiter.max_requests),
+                "X-RateLimit-Remaining": "0",
+                "Retry-After": str(int(limiter.window_seconds)),
+            },
+        )
+
+    response = await call_next(request)
+    remaining = limiter.remaining(client_key)
+    response.headers["X-RateLimit-Limit"] = str(limiter.max_requests)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
 
 
 @app.post("/tasks", response_model=TaskSubmitResponse)
@@ -87,10 +126,7 @@ async def dashboard():
 
 @app.get("/health")
 async def health():
-    """Comprehensive healthcheck endpoint.
-
-    Returns service status, version, uptime, and individual component health.
-    """
+    """Comprehensive healthcheck endpoint."""
     global _router, _startup_time
 
     router_ok = _router is not None
@@ -100,7 +136,6 @@ async def health():
         and _router.carbon.api_key is not None
     )
 
-    # Build component checks
     components = {
         "router": {
             "status": "ok" if router_ok else "error",
@@ -112,7 +147,6 @@ async def health():
         },
     }
 
-    # Try Redis connectivity — check if config has redis_url
     redis_status = "unknown"
     redis_detail = "not_checked"
     if _router is not None:
@@ -120,6 +154,7 @@ async def health():
             cfg = load_config("config.yaml")
             if cfg.redis_url:
                 import redis as rmod
+
                 redis_conn = rmod.from_url(cfg.redis_url)
                 redis_conn.ping()
                 redis_status = "ok"
@@ -131,7 +166,6 @@ async def health():
             redis_detail = str(exc)
     components["redis"] = {"status": redis_status, "detail": redis_detail}
 
-    # Overall status
     all_ok = all(c["status"] == "ok" for c in components.values())
     any_error = any(c["status"] == "error" for c in components.values())
     if all_ok:
