@@ -33,14 +33,22 @@ async def test_fetch_cached_response():
 @pytest.mark.asyncio
 async def test_api_success():
     """Mock a successful API response with LOW intensity."""
+    from unittest.mock import MagicMock
+
     client = CarbonApiClient(api_key="real-key")
     client._cache.clear()
 
-    mock_response = AsyncMock()
+    # Use a regular Mock for the response since httpx.Response methods are sync
+    mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"carbonIntensity": 150.0, "zone": "AU-NSW"}
+    mock_response.raise_for_status.return_value = None
 
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response):
+    mock_client = AsyncMock()
+    mock_client.__aenter__.return_value = mock_client
+    mock_client.get.return_value = mock_response
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
         conditions = await client.fetch_carbon_intensity(region="AU-NSW")
 
     assert conditions.level == GridCarbonLevel.LOW

@@ -4,25 +4,13 @@
   "phase": 3,
   "phase_name": "Deployment Infrastructure",
   "completed": [
-    ".gitignore",
-    "Package restructure (energy_router/*.py)",
-    "tests/ scaffold",
-    "Dockerfile",
-    "docker-compose.yml",
-    "Makefile",
-    "config.yaml",
-    "git commit + old src/ cleanup",
-    "Real carbon API integration (electricitymap.org with cache + fallback)",
-    "Config loading from YAML + env vars",
-    "Redis-backed deferral queue",
-    "SQLite audit trail",
-    "CLI tool (submit/audit/health/serve)",
-    "FastAPI REST API",
-    "Comprehensive async tests for carbon, router, API"
+    "Phase 1: Project foundation (.gitignore, Docker, docker-compose, Makefile, package structure, tests scaffold)",
+    "Phase 2: Real carbon API (electricitymap.org with cache+fallback), Redis queue, SQLite audit, CLI tool, CI workflow",
+    "All pushed to GitHub"
   ],
-  "current": "Add GitHub Actions CI/CD workflow",
-  "next": "Add systemd service file and Cloudflare tunnel config",
-  "health": "untested",
-  "last_sha": "3b64259ad5bae90e8867bdda46f34faff2fb8285",
-  "blocker": "terminal_commands_blocked_by_tirith_security_scanner"
+  "current": null,
+  "next": "Phase 3a: Systemd service file",
+  "health": "10_pass_4_error_1_fail",
+  "last_sha": "6f6b89e",
+  "blocker": null
 }

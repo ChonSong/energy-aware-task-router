@@ -1,0 +1,35 @@
+[Unit]
+Description=Energy-Aware Task Router
+Documentation=https://github.com/seanpierce/energy-aware-task-router
+After=network-online.target redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sc
+Group=sc
+WorkingDirectory=/home/sc/repos/energy-aware-task-router
+
+# Path to the virtual environment
+Environment=VIRTUAL_ENV=/home/sc/repos/energy-aware-task-router/.venv
+Environment=PATH=/home/sc/repos/energy-aware-task-router/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CARBON_API_KEY=%i
+
+# Load carbon API key from environment file if it exists
+EnvironmentFile=-/etc/energy-router.env
+
+# Run the CLI serve command
+ExecStart=/home/sc/repos/energy-aware-task-router/.venv/bin/python -m energy_router.cli serve
+
+# Restart on failure
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/sc/repos/energy-aware-task-router
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

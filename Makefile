@@ -27,3 +27,17 @@ lint:
 
 format:
 	ruff format energy_router/ tests/
+
+deploy-systemd:
+	@echo "==> Installing systemd service... (requires sudo)"
+	sudo cp deploy/energy-router.service /etc/systemd/system/energy-router.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable energy-router
+	sudo systemctl restart energy-router || sudo systemctl start energy-router
+	@echo "==> Service status:"
+	sudo systemctl status energy-router --no-pager
+
+deploy-all: deploy
+	$(MAKE) deploy-systemd
+
+.PHONY: dev test test-coverage build deploy clean lint format deploy-systemd deploy-all

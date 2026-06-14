@@ -6,10 +6,19 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from energy_router.api import app
+from energy_router.carbon import CarbonApiClient
+from energy_router.config import load_config
+from energy_router.router import TaskRouter
 
 
 @pytest.fixture
 async def client():
+    """Set up the router and create a test client."""
+    import energy_router.api as api_mod
+    cfg = load_config()
+    carbon_client = CarbonApiClient(api_key=cfg.carbon_api_key)
+    api_mod._router = TaskRouter(carbon_client=carbon_client, default_region=cfg.default_region)
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
