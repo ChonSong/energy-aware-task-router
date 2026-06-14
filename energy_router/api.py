@@ -38,18 +38,90 @@ _lifecycle: LifecycleManager | None = None
 _logger = structlog.get_logger()
 
 
+# ---------------------------------------------------------------------------
+# Request / Response models
+# ---------------------------------------------------------------------------
+
+
 class TaskSubmitRequest(BaseModel):
-    name: str
-    deferrable: bool = True
-    defer_until: str | None = None
-    deadline: datetime | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
+    """Request body for submitting a task for energy-aware routing."""
+
+    name: str = Field(..., description="Human-readable task name", examples=["batch-training-job"])
+    deferrable: bool = Field(
+        True,
+        description="Whether the task can be deferred to a lower-carbon window",
+    )
+    defer_until: str | None = Field(
+        None,
+        description="Minimum carbon level required before routing ('low', 'medium', 'high')",
+        examples=["low"],
+    )
+    deadline: datetime | None = Field(
+        None,
+        description="ISO-8601 deadline before which the task must be routed",
+        examples=["2026-12-31T23:59:59"],
+    )
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arbitrary metadata payload passed through to the router",
+        examples=[{"job_type": "model_training", "priority": 3}],
+    )
 
 
 class TaskSubmitResponse(BaseModel):
-    task_id: str
-    name: str
-    status: str
+    """Response returned after submitting a task."""
+
+    task_id: str = Field(..., description="Unique identifier for the submitted task", examples=["a1b2c3d4-..."])
+    name: str = Field(..., description="Task name from the request", examples=["batch-training-job"])
+    status: str = Field(..., description="Routing decision: 'route_now' or 'defer'", examples=["route_now", "defer"])
+
+
+class LivenessResponse(BaseModel):
+    """Response from the Kubernetes liveness probe."""
+
+    status: str = Field(..., description="Always 'alive' when the process is running", examples=["alive"])
+
+
+class ReadinessOkResponse(BaseModel):
+    """Response from the Kubernetes readiness probe when the router is ready."""
+
+    status: str = Field(..., description="'ready' when the router is initialised", examples=["ready"])
+
+
+class ReadinessNotReadyResponse(BaseModel):
+    """Response from the Kubernetes readiness probe when the router is not ready."""
+
+    status: str = Field(..., description="'not_ready' when the router is not initialised", examples=["not_ready"])
+    detail: str = Field(
+        ..., description="Explanation of why the router is not ready", examples=["router not initialised"]
+    )
+
+
+class ComponentHealth(BaseModel):
+    """Status of a single system component."""
+
+    status: str = Field(
+        ..., description="Component health status", examples=["ok", "error", "degraded"]
+    )
+    detail: str = Field(
+        ..., description="Detailed status message explaining the component state",
+        examples=["initialized", "not_initialized", "no_api_key"],
+    )
+
+
+class HealthResponse(BaseModel):
+    """Comprehensive health check response with per-component status."""
+
+    status: str = Field(
+        ..., description="Overall system health", examples=["healthy", "degraded", "unhealthy"]
+    )
+    version: str = Field(..., description="Application version", examples=["0.1.0"])
+    uptime_seconds: float | None = Field(
+        None, description="Seconds since application startup", examples=[1234.56]
+    )
+    components: dict[str, ComponentHealth] = Field(
+        ..., description="Status of individual system components (router, carbon_api, redis)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +274,19 @@ async def rate_limit_middleware(request: Request, call_next: Any):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/tasks", response_model=TaskSubmitResponse)
+@app.post(
+    "/tasks",
+    response_model=TaskSubmitResponse,
+    summary="Submit a task for energy-aware routing",
+    description="Submit a compute task to be routed based on current grid carbon intensity. "
+    "The router decides whether to run now or defer based on carbon conditions, "
+    "task deadline, and deferrability.",
+    tags=["routing"],
+    responses={
+        400: {"description": "Invalid request — e.g. unrecognised defer_until value"},
+        503: {"description": "Router not initialised"},
+    },
+)
 async def submit_task(req: TaskSubmitRequest):
     if _router is None:
         raise HTTPException(status_code=503, detail="Router not initialized")
@@ -224,7 +308,15 @@ async def submit_task(req: TaskSubmitRequest):
     return TaskSubmitResponse(task_id=task.id, name=task.name, status=decision.decision)
 
 
-@app.get("/livez")
+@app.get(
+    "/livez",
+    response_model=LivenessResponse,
+    summary="Kubernetes liveness probe",
+    description="Returns 200 with status 'alive' if the process is running "
+    "and the ASGI loop is responsive. No dependency checks — a dead process "
+    "won't reach this handler, so a 200 response is sufficient proof of life.",
+    tags=["observability"],
+)
 async def livez():
     """Kubernetes liveness probe.
 
@@ -233,10 +325,24 @@ async def livez():
     process won't reach this handler, so a 200 response is sufficient
     proof of life.
     """
-    return {"status": "alive"}
+    return LivenessResponse(status="alive")
 
 
-@app.get("/readyz")
+@app.get(
+    "/readyz",
+    response_model=ReadinessOkResponse,
+    summary="Kubernetes readiness probe",
+    description="Returns 200 if the router is initialised and the app is ready to "
+    "serve traffic. Returns 503 if the router has not yet been initialised "
+    "(or has been cleared during a graceful shutdown).",
+    tags=["observability"],
+    responses={
+        503: {
+            "description": "Router not ready",
+            "model": ReadinessNotReadyResponse,
+        },
+    },
+)
 async def readyz():
     """Kubernetes readiness probe.
 
@@ -248,24 +354,46 @@ async def readyz():
     if _router is None:
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "detail": "router not initialised"},
+            content=ReadinessNotReadyResponse(
+                status="not_ready", detail="router not initialised"
+            ).model_dump(),
         )
-    return {"status": "ready"}
+    return ReadinessOkResponse(status="ready")
 
 
-@app.get("/metrics")
+@app.get(
+    "/metrics",
+    summary="Prometheus-format metrics endpoint",
+    description="Returns application metrics in Prometheus exposition format "
+    "(text/plain; version=0.0.4) for scraping by Prometheus or compatible collectors.",
+    tags=["observability"],
+)
 async def metrics():
     """Prometheus-format metrics endpoint."""
     return Response(content=collect_metrics_text(), media_type="text/plain; version=0.0.4")
 
 
-@app.get("/dashboard")
+@app.get(
+    "/dashboard",
+    summary="HTML monitoring dashboard",
+    description="Returns a self-contained HTML monitoring dashboard page with "
+    "live health status, component breakdown, and auto-refresh every 30 seconds.",
+    tags=["observability"],
+)
 async def dashboard():
     """Minimal HTML monitoring dashboard."""
     return HTMLResponse(content=dashboard_html())
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Comprehensive health check",
+    description="Returns detailed health status of all system components including "
+    "the router, Carbon API client configuration, and Redis connectivity. "
+    "The overall status aggregates per-component statuses.",
+    tags=["observability"],
+)
 async def health():
     """Comprehensive healthcheck endpoint."""
     global _router, _startup_time
@@ -277,16 +405,17 @@ async def health():
         and _router.carbon.api_key is not None
     )
 
-    components = {
-        "router": {
-            "status": "ok" if router_ok else "error",
-            "detail": "initialized" if router_ok else "not_initialized",
-        },
-        "carbon_api": {
-            "status": "ok" if carbon_key_set else "degraded",
-            "detail": "key_configured" if carbon_key_set else "no_api_key",
-        },
-    }
+    components: dict[str, ComponentHealth] = {}
+
+    components["router"] = ComponentHealth(
+        status="ok" if router_ok else "error",
+        detail="initialized" if router_ok else "not_initialized",
+    )
+
+    components["carbon_api"] = ComponentHealth(
+        status="ok" if carbon_key_set else "degraded",
+        detail="key_configured" if carbon_key_set else "no_api_key",
+    )
 
     redis_status = "unknown"
     redis_detail = "not_checked"
@@ -305,10 +434,10 @@ async def health():
         except Exception as exc:
             redis_status = "degraded" if "connection refused" in str(exc).lower() else "error"
             redis_detail = str(exc)
-    components["redis"] = {"status": redis_status, "detail": redis_detail}
+    components["redis"] = ComponentHealth(status=redis_status, detail=redis_detail)
 
-    all_ok = all(c["status"] == "ok" for c in components.values())
-    any_error = any(c["status"] == "error" for c in components.values())
+    all_ok = all(c.status == "ok" for c in components.values())
+    any_error = any(c.status == "error" for c in components.values())
     if all_ok:
         overall_status = "healthy"
     elif any_error:
@@ -320,9 +449,9 @@ async def health():
     if _startup_time is not None:
         uptime = round(time.time() - _startup_time, 2)
 
-    return {
-        "status": overall_status,
-        "version": __version__,
-        "uptime_seconds": uptime,
-        "components": components,
-    }
+    return HealthResponse(
+        status=overall_status,
+        version=__version__,
+        uptime_seconds=uptime,
+        components=components,
+    )

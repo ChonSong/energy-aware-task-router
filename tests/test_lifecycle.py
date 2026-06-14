@@ -163,7 +163,8 @@ async def test_health_works_after_startup():
 
     from energy_router.api import health as health_handler
     result = await health_handler()
-    assert result["status"] in ("healthy", "degraded")
-    assert result["version"] == "0.1.0"
-    assert result["uptime_seconds"] >= 0
-    assert "lifecycle" not in result  # just to confirm no leak
+    # health() now returns a HealthResponse model (not a dict)
+    assert result.status in ("healthy", "degraded")
+    assert result.version == "0.1.0"
+    assert result.uptime_seconds >= 0
+    assert not hasattr(result, "lifecycle")  # just to confirm no leak
