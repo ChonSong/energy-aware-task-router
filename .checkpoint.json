@@ -1,8 +1,8 @@
 {
   "project": "energy-aware-task-router",
   "repo": "/home/sc/repos/energy-aware-task-router",
-  "phase": 1,
-  "phase_name": "Project Foundation",
+  "phase": 3,
+  "phase_name": "Deployment Infrastructure",
   "completed": [
     ".gitignore",
     "Package restructure (energy_router/*.py)",
@@ -10,11 +10,19 @@
     "Dockerfile",
     "docker-compose.yml",
     "Makefile",
-    "config.yaml"
+    "config.yaml",
+    "git commit + old src/ cleanup",
+    "Real carbon API integration (electricitymap.org with cache + fallback)",
+    "Config loading from YAML + env vars",
+    "Redis-backed deferral queue",
+    "SQLite audit trail",
+    "CLI tool (submit/audit/health/serve)",
+    "FastAPI REST API",
+    "Comprehensive async tests for carbon, router, API"
   ],
-  "current": "Package restructure + all Phase 1 files created",
-  "next": "git commit (blocked: terminal unavailable this run)",
-  "health": "no_tests_run",
-  "last_sha": null,
-  "blocker": "Terminal tool blocked by security scanner (tirith:unknown). All source files written. Need terminal for git add/commit, pytest, and old src/ cleanup."
+  "current": "Add GitHub Actions CI/CD workflow",
+  "next": "Add systemd service file and Cloudflare tunnel config",
+  "health": "untested",
+  "last_sha": "3b64259ad5bae90e8867bdda46f34faff2fb8285",
+  "blocker": "terminal_commands_blocked_by_tirith_security_scanner"
 }
