@@ -17,6 +17,6 @@
   "current": "Phase 4b: API key auth done",
   "next": "Phase 4c: Structured logging with structlog (or Phase 5: Kubernetes readiness probes)",
   "health": "40_pass_0_error_0_fail",
-  "last_sha": "6fe34b5",
+  "last_sha": "3b9ae81",
   "blocker": null
 }
