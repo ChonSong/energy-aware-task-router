@@ -9,11 +9,13 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from energy_router import __version__
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
+from energy_router.monitoring import collect_metrics_text, dashboard_html, record_metric
 from energy_router.router import Task, TaskRouter
 
 app = FastAPI(title="Energy-Aware Task Router")
@@ -69,6 +71,18 @@ async def submit_task(req: TaskSubmitRequest):
     )
     decision = await _router.route(task)
     return TaskSubmitResponse(task_id=task.id, name=task.name, status=decision.decision)
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus-format metrics endpoint."""
+    return Response(content=collect_metrics_text(), media_type="text/plain; version=0.0.4")
+
+
+@app.get("/dashboard")
+async def dashboard():
+    """Minimal HTML monitoring dashboard."""
+    return HTMLResponse(content=dashboard_html())
 
 
 @app.get("/health")
