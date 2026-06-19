@@ -45,6 +45,12 @@ jobs:
       - name: Check formatting with ruff
         run: ruff format --check energy_router/ tests/
 
+      - name: Type check with mypy
+        run: mypy energy_router/
+
+      - name: Security scan with bandit
+        run: bandit -c pyproject.toml -r energy_router/
+
       - name: Test with pytest
         env:
           REDIS_URL: redis://localhost:6379/0

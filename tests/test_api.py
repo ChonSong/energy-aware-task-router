@@ -135,7 +135,10 @@ async def test_submit_when_router_not_initialized(client):
     api_mod._router = saved
     
     assert resp.status_code == 503
-    assert "Router not initialized" in resp.json()["detail"]
+    data = resp.json()
+    assert "Router not initialized" in data["detail"]
+    assert data["error_code"] == "service_unavailable"
+    assert data["status"] == 503
 
 
 # ---------------------------------------------------------------------------
@@ -264,4 +267,5 @@ async def test_rate_limit_blocks_over_limit(client):
     assert resp3.status_code == 429
     data = resp3.json()
     assert "rate limit" in data["detail"].lower()
-    assert "retry_after_seconds" in data
+    assert data["error_code"] == "rate_limited"
+    assert data["status"] == 429

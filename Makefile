@@ -1,4 +1,4 @@
-.PHONY: dev test build deploy clean lint format
+.PHONY: dev test build deploy clean lint format type-check security-scan pre-commit install-dev
 
 dev:
 	uvicorn energy_router.api:app --host 0.0.0.0 --port 8009 --reload
@@ -27,6 +27,19 @@ lint:
 
 format:
 	ruff format energy_router/ tests/
+
+type-check:
+	mypy energy_router/
+
+security-scan:
+	bandit -c pyproject.toml -r energy_router/
+
+pre-commit:
+	pre-commit run --all-files
+
+install-dev:
+	pip install -e ".[dev]"
+	pre-commit install || true
 
 deploy-systemd:
 	@echo "==> Installing systemd service... (requires sudo)"

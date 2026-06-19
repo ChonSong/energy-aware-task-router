@@ -12,10 +12,13 @@ import httpx
 import structlog
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from energy_router import __version__
+from energy_router.error_models import ErrorResponse, FieldError, ValidationErrorResponse
 from energy_router.auth import AUTH_EXEMPT_PATHS, APIKeyAuth
 from energy_router.carbon import CarbonApiClient, GridCarbonLevel
 from energy_router.config import load_config
@@ -211,7 +214,11 @@ async def auth_middleware(request: Request, call_next: Any):
     if not authenticator.authenticate(api_key):
         return JSONResponse(
             status_code=401,
-            content={"detail": "Unauthorized. Provide a valid API key via the X-API-Key header."},
+            content=ErrorResponse(
+                status=401,
+                detail="Unauthorized. Provide a valid API key via the X-API-Key header.",
+                error_code="unauthorized",
+            ).model_dump(),
             headers={"WWW-Authenticate": "APIKey"},
         )
 
@@ -251,10 +258,11 @@ async def rate_limit_middleware(request: Request, call_next: Any):
     if not limiter.check(client_key):
         return JSONResponse(
             status_code=429,
-            content={
-                "detail": "Rate limit exceeded. Try again later.",
-                "retry_after_seconds": int(limiter.window_seconds),
-            },
+            content=ErrorResponse(
+                status=429,
+                detail="Rate limit exceeded. Try again later.",
+                error_code="rate_limited",
+            ).model_dump(),
             headers={
                 "X-RateLimit-Limit": str(limiter.max_requests),
                 "X-RateLimit-Remaining": "0",
@@ -267,6 +275,89 @@ async def rate_limit_middleware(request: Request, call_next: Any):
     response.headers["X-RateLimit-Limit"] = str(limiter.max_requests)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     return response
+
+
+# ---------------------------------------------------------------------------
+# Exception handlers — structured error responses
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Handle ``HTTPException`` (including FastAPI's ``HTTPException``) and
+    return a consistent ``ErrorResponse`` JSON body.
+
+    Maps HTTP status codes to machine-readable ``error_code`` values.
+    """
+    code_map: dict[int, str] = {
+        400: "bad_request",
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        405: "method_not_allowed",
+        429: "rate_limited",
+        500: "internal_error",
+        503: "service_unavailable",
+    }
+    error_code = code_map.get(exc.status_code, "http_error")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            status=exc.status_code,
+            detail=str(exc.detail) if exc.detail else "An error occurred",
+            error_code=error_code,
+        ).model_dump(),
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Handle Pydantic ``RequestValidationError`` and return a structured
+    ``ValidationErrorResponse`` with per-field details.
+
+    This lets API clients pinpoint exactly which inputs are wrong
+    rather than receiving a single opaque error string.
+    """
+    field_errors: list[FieldError] = []
+    for err in exc.errors():
+        field_loc = " -> ".join(str(loc) for loc in err.get("loc", []))
+        field_errors.append(
+            FieldError(
+                field=field_loc,
+                message=err.get("msg", "Validation error"),
+            )
+        )
+    return JSONResponse(
+        status_code=422,
+        content=ValidationErrorResponse(
+            status=422,
+            detail="Request validation failed",
+            error_code="validation_error",
+            errors=field_errors,
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all handler for any unhandled exception.
+
+    Returns a 500 ``ErrorResponse`` so the client never receives an
+    unparseable response body.  The full exception is logged for
+    debugging.
+    """
+    _logger.exception("unhandled_exception", error=str(exc))
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            status=500,
+            detail="An internal server error occurred",
+            error_code="internal_error",
+        ).model_dump(),
+    )
 
 
 # ---------------------------------------------------------------------------

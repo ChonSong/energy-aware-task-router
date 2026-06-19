@@ -87,6 +87,8 @@ async def test_missing_key_returns_401(secured_client):
     data = resp.json()
     assert "detail" in data
     assert "Unauthorized" in data["detail"]
+    assert data["error_code"] == "unauthorized"
+    assert data["status"] == 401
     assert resp.headers.get("www-authenticate") == "APIKey"
 
 

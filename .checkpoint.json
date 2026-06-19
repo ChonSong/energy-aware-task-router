@@ -1,8 +1,8 @@
 {
   "project": "energy-aware-task-router",
   "repo": "/home/sc/repos/energy-aware-task-router",
-  "phase": 6,
-  "phase_name": "OpenAPI schema hardening — Phase 6 done",
+  "phase": 7,
+  "phase_name": "Phase 7 — structured error responses, middleware tests, CI/CD hardening",
   "completed": [
     "Phase 1: Project foundation (.gitignore, Docker, docker-compose, Makefile, package structure, tests scaffold)",
     "Phase 2: Real carbon API (electricitymap.org with cache+fallback), Redis queue, SQLite audit, CLI tool, CI workflow",
@@ -16,11 +16,14 @@
     "Phase 4c: Structured logging with structlog — centralized logging_config.py, request/response logging middleware, JSON/dev output, LOG_LEVEL/LOG_FORMAT env var overrides, 4 new tests",
     "Phase 4d: Graceful shutdown / lifecycle hooks — LifecycleManager class, shared HTTPX client lifecycle, FastAPI shutdown event handler, Redis connection cleanup, CLI serve with timeout_graceful_shutdown, 9 new tests",
     "Phase 5: K8s readiness probes + deployment manifests — /livez and /readyz endpoints, K8s Deployment/Service/Kustomization, 7 new tests, all exempt from auth and rate limiting",
-    "Phase 6: OpenAPI schema hardening — Pydantic response models with Field descriptions/examples for all endpoints, summary/description/tags/response metadata on every route, all 61 tests passing"
+    "Phase 6: OpenAPI schema hardening — Pydantic response models with Field descriptions/examples for all endpoints, summary/description/tags/response metadata on every route, all 61 tests passing",
+    "Phase 7a: Structured error response models — ErrorResponse, ValidationErrorResponse, FieldError Pydantic models + global exception handlers (HTTPException, RequestValidationError, generic Exception) returning consistent JSON with status/detail/error_code fields",
+    "Phase 7b: Middleware tests — 14 new tests covering logging middleware (method/path/status/duration capture), auth edge cases (empty key, whitespace, lowercase header, exempt paths), rate-limit edge cases (burst via headers, window expiry, 429 response shape, exempt paths), validation error shape, 404/405 structured responses",
+    "Phase 7c: CI/CD hardening — .pre-commit-config.yaml (ruff, mypy, bandit, pre-commit-hooks), mypy + bandit config in pyproject.toml, dev dependency additions, Makefile targets (type-check, security-scan, pre-commit, install-dev), GitHub Actions workflow extended with mypy type-check and bandit security-scan steps"
   ],
-  "current": "Phase 6: OpenAPI schema hardening done",
-  "next": "Phase 7: (upcoming — e.g. structured error responses, middleware tests, or CI/CD hardening)",
-  "health": "61_pass_0_error_0_fail",
-  "last_sha": "4c8a64f",
+  "current": "Phase 7: structured error responses, middleware tests, CI/CD hardening — done",
+  "next": null,
+  "health": "75_pass_0_error_0_fail",
+  "last_sha": "b31e8b0",
   "blocker": null
 }
